@@ -18,7 +18,6 @@ import static com.performanceactive.plugins.camera.CustomCameraActivity.RESULT_E
 import static com.performanceactive.plugins.camera.CustomCameraActivity.TARGET_HEIGHT;
 import static com.performanceactive.plugins.camera.CustomCameraActivity.TARGET_WIDTH;
 
-
 public class CustomCamera extends CordovaPlugin {
 
     private CallbackContext callbackContext;

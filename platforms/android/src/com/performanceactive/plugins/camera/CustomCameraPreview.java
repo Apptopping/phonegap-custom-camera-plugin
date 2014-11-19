@@ -22,17 +22,21 @@ public class CustomCameraPreview extends SurfaceView implements SurfaceHolder.Ca
     private static final String TAG = CustomCameraPreview.class.getSimpleName();
 
     private final Camera camera;
+    private SurfaceHolder mSurfaceHolder;
 
     public CustomCameraPreview(Context context, Camera camera) {
         super(context);
         this.camera = camera;
-        getHolder().addCallback(this);
+        this.mSurfaceHolder = this.getHolder();
+        this.mSurfaceHolder.addCallback(this);
+        this.mSurfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
     }
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         try {
             // TODO: show activity indicator here, it can take almost 1 second to show the preview
+            
             camera.setPreviewDisplay(holder);
             camera.startPreview();
         } catch (IOException e) {
@@ -58,48 +62,78 @@ public class CustomCameraPreview extends SurfaceView implements SurfaceHolder.Ca
 
         try {
             Camera.Parameters cameraSettings = camera.getParameters();
-            Size previewSize = optimimalPreviewSize(width, height);
+            List<Size> supportedPreviewSizes = cameraSettings.getSupportedPreviewSizes();
+            Size previewSize = getOptimalPreviewSize(supportedPreviewSizes, width, height);
             cameraSettings.setPreviewSize(previewSize.width, previewSize.height);
             camera.setParameters(cameraSettings);
             camera.setPreviewDisplay(holder);
             camera.setDisplayOrientation(90);
-            camera.startPreview();
+            Log.d(TAG, " preview Height" + Integer.toString(previewSize.height));
+
+            if (previewSize != null) {
+                camera.startPreview();
+            }
+          
+        
         } catch (Exception e){
             Log.d(TAG, "Error starting camera preview: " + e.getMessage());
         }
     }
 
-    private Size optimimalPreviewSize(int targetWidth, int targetHeight) {
-        List<Size> sizes = camera.getParameters().getSupportedPreviewSizes();
-        float targetAspectRatio = (float) targetWidth / targetHeight;
-        List<Size> sizesWithMatchingAspectRatios = filterByAspectRatio(targetAspectRatio, sizes);
-        if (sizesWithMatchingAspectRatios.size() > 0) {
-            return optimalSizeForHeight(sizesWithMatchingAspectRatios, targetHeight);
-        }
-        return optimalSizeForHeight(sizes, targetHeight);
-    }
+    static Size getOptimalPreviewSize(List<Size> sizes, int w, int h) {
+        final double ASPECT_TOLERANCE = 0.1;
+        final double MAX_DOWNSIZE = 1.5;
 
-    private List<Size> filterByAspectRatio(float targetAspectRatio, List<Size> sizes) {
-        List<Size> filteredSizes = new ArrayList<Size>();
-        for (Size size : sizes) {
-            // reverse the ratio calculation as we've flipped the orientation
-            float aspectRatio = (float)size.height / size.width;
-            if (aspectRatio == targetAspectRatio) {
-                filteredSizes.add(size);
-            }
-        }
-        return filteredSizes;
-    }
+        double targetRatio = (double) w / h;
+        if (sizes == null) return null;
 
-    private Size optimalSizeForHeight(List<Size> sizes, int targetHeight) {
         Size optimalSize = null;
-        float minimumHeightDelta = Float.MAX_VALUE;
+        double minDiff = Double.MAX_VALUE;
+
+        int targetHeight = h;
+
+        // Try to find an size match aspect ratio and size
         for (Size size : sizes) {
-            if (Math.abs(size.height - targetHeight) < minimumHeightDelta) {
+            double ratio = (double) size.width / size.height;
+            double downsize = (double) size.width / w;
+            if (downsize > MAX_DOWNSIZE) {
+                //if the preview is a lot larger than our display surface ignore it
+                //reason - on some phones there is not enough heap available to show the larger preview sizes 
+                continue;
+            }
+            if (Math.abs(ratio - targetRatio) > ASPECT_TOLERANCE) continue;
+            if (Math.abs(size.height - targetHeight) < minDiff) {
                 optimalSize = size;
-                minimumHeightDelta = Math.abs(size.height - targetHeight);
+                minDiff = Math.abs(size.height - targetHeight);
             }
         }
+
+        // Cannot find the one match the aspect ratio, ignore the requirement
+        //keep the max_downsize requirement
+        if (optimalSize == null) {
+            minDiff = Double.MAX_VALUE;
+            for (Size size : sizes) {
+                double downsize = (double) size.width / w;
+                if (downsize > MAX_DOWNSIZE) {
+                    continue;
+                }
+                if (Math.abs(size.height - targetHeight) < minDiff) {
+                    optimalSize = size;
+                    minDiff = Math.abs(size.height - targetHeight);
+                }
+            }
+        }
+        //everything else failed, just take the closest match
+        if (optimalSize == null) {
+            minDiff = Double.MAX_VALUE;
+            for (Size size : sizes) {
+                if (Math.abs(size.height - targetHeight) < minDiff) {
+                    optimalSize = size;
+                    minDiff = Math.abs(size.height - targetHeight);
+                }
+            }
+        }
+
         return optimalSize;
     }
 

@@ -4,13 +4,11 @@ package com.performanceactive.plugins.camera;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Matrix;
-import android.graphics.Point;
 import android.hardware.Camera;
 import android.hardware.Camera.AutoFocusCallback;
 import android.hardware.Camera.PictureCallback;
@@ -23,7 +21,6 @@ import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
@@ -41,8 +38,6 @@ import static android.hardware.Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE;
 public class CustomCameraActivity extends Activity {
 
     private static final String TAG = CustomCameraActivity.class.getSimpleName();
-    private static final float ASPECT_RATIO = 126.0f / 86;
-
     public static String FILENAME = "Filename";
     public static String QUALITY = "Quality";
     public static String TARGET_WIDTH = "TargetWidth";
@@ -53,11 +48,9 @@ public class CustomCameraActivity extends Activity {
 
     private Camera camera;
     private RelativeLayout layout;
-    private FrameLayout cameraPreviewView;
-    private ImageView borderTopLeft;
-    private ImageView borderTopRight;
-    private ImageView borderBottomLeft;
-    private ImageView borderBottomRight;
+    private RelativeLayout cameraPreviewView;
+    private ImageView overlayImageView;
+
     private ImageButton captureButton;
 
     @Override
@@ -75,6 +68,7 @@ public class CustomCameraActivity extends Activity {
     private void configureCamera() {
         Camera.Parameters cameraSettings = camera.getParameters();
         cameraSettings.setJpegQuality(100);
+        cameraSettings.set("orientation", "landscape");
         List<String> supportedFocusModes = cameraSettings.getSupportedFocusModes();
         if (supportedFocusModes.contains(FOCUS_MODE_CONTINUOUS_PICTURE)) {
             cameraSettings.setFocusMode(FOCUS_MODE_CONTINUOUS_PICTURE);
@@ -112,118 +106,40 @@ public class CustomCameraActivity extends Activity {
         RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         layout.setLayoutParams(layoutParams);
         createCameraPreview();
-        createTopLeftBorder();
-        createTopRightBorder();
-        createBottomLeftBorder();
-        createBottomRightBorder();
-        layoutBottomBorderImagesRespectingAspectRatio();
+        createOverlay();
         createCaptureButton();
         setContentView(layout);
     }
 
     private void createCameraPreview() {
-        cameraPreviewView = new FrameLayout(this);
-        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+        cameraPreviewView = new RelativeLayout(this);
+        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+       
+        layoutParams.topMargin = dpToPixels(48);
+        layoutParams.bottomMargin = dpToPixels(100);
+        layoutParams.leftMargin = dpToPixels(0);
+        layoutParams.rightMargin = dpToPixels(0);
+        
         cameraPreviewView.setLayoutParams(layoutParams);
         layout.addView(cameraPreviewView);
     }
 
-    private void createTopLeftBorder() {
-        borderTopLeft = new ImageView(this);
-        setBitmap(borderTopLeft, "border_top_left.png");
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(dpToPixels(50), dpToPixels(50));
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        if (isXLargeScreen()) {
-            layoutParams.topMargin = dpToPixels(100);
-            layoutParams.leftMargin = dpToPixels(100);
-        } else if (isLargeScreen()) {
-            layoutParams.topMargin = dpToPixels(50);
-            layoutParams.leftMargin = dpToPixels(50);
-        } else {
-            layoutParams.topMargin = dpToPixels(10);
-            layoutParams.leftMargin = dpToPixels(10);
-        }
-        borderTopLeft.setLayoutParams(layoutParams);
-        layout.addView(borderTopLeft);
-    }
+  private void createOverlay() {
+        overlayImageView = new ImageView(this);
+        String filename = getIntent().getStringExtra(FILENAME) + "_overlay.png";
+        Log.d(TAG, " image: " + filename);
+        setBitmap(overlayImageView, filename);
+        overlayImageView.setScaleType(ScaleType.FIT_XY);
+        overlayImageView.setAdjustViewBounds(false);
+        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+        layoutParams.topMargin = dpToPixels(48);
+        layoutParams.bottomMargin = dpToPixels(100);
 
-    private void createTopRightBorder() {
-        borderTopRight = new ImageView(this);
-        setBitmap(borderTopRight, "border_top_right.png");
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(dpToPixels(50), dpToPixels(50));
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-        if (isXLargeScreen()) {
-            layoutParams.topMargin = dpToPixels(100);
-            layoutParams.rightMargin = dpToPixels(100);
-        } else if (isLargeScreen()) {
-            layoutParams.topMargin = dpToPixels(50);
-            layoutParams.rightMargin = dpToPixels(50);
-        } else {
-            layoutParams.topMargin = dpToPixels(10);
-            layoutParams.rightMargin = dpToPixels(10);
-        }
-        borderTopRight.setLayoutParams(layoutParams);
-        layout.addView(borderTopRight);
-    }
+        overlayImageView.setLayoutParams(layoutParams);
+        
+        Log.d(TAG, " max Height" + Integer.toString(overlayImageView.getHeight()));
 
-    private void createBottomLeftBorder() {
-        borderBottomLeft = new ImageView(this);
-        setBitmap(borderBottomLeft, "border_bottom_left.png");
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(dpToPixels(50), dpToPixels(50));
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        if (isXLargeScreen()) {
-            layoutParams.leftMargin = dpToPixels(100);
-        } else if (isLargeScreen()) {
-            layoutParams.leftMargin = dpToPixels(50);
-        } else {
-            layoutParams.leftMargin = dpToPixels(10);
-        }
-        borderBottomLeft.setLayoutParams(layoutParams);
-        layout.addView(borderBottomLeft);
-    }
-
-    private void createBottomRightBorder() {
-        borderBottomRight = new ImageView(this);
-        setBitmap(borderBottomRight, "border_bottom_right.png");
-        RelativeLayout.LayoutParams layoutParams = new RelativeLayout.LayoutParams(dpToPixels(50), dpToPixels(50));
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        layoutParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-        if (isXLargeScreen()) {
-            layoutParams.rightMargin = dpToPixels(100);
-        } else if (isLargeScreen()) {
-            layoutParams.rightMargin = dpToPixels(50);
-        } else {
-            layoutParams.rightMargin = dpToPixels(10);
-        }
-        borderBottomRight.setLayoutParams(layoutParams);
-        layout.addView(borderBottomRight);
-    }
-
-    private void layoutBottomBorderImagesRespectingAspectRatio() {
-        RelativeLayout.LayoutParams borderTopLeftLayoutParams = (RelativeLayout.LayoutParams)borderTopLeft.getLayoutParams();
-        RelativeLayout.LayoutParams borderTopRightLayoutParams = (RelativeLayout.LayoutParams)borderTopRight.getLayoutParams();
-        RelativeLayout.LayoutParams borderBottomLeftLayoutParams = (RelativeLayout.LayoutParams)borderBottomLeft.getLayoutParams();
-        RelativeLayout.LayoutParams borderBottomRightLayoutParams = (RelativeLayout.LayoutParams)borderBottomRight.getLayoutParams();
-        float height = (screenWidthInPixels() - borderTopRightLayoutParams.rightMargin - borderTopLeftLayoutParams.leftMargin) * ASPECT_RATIO;
-        borderBottomLeftLayoutParams.bottomMargin = screenHeightInPixels() - Math.round(height) - borderTopLeftLayoutParams.topMargin;
-        borderBottomLeft.setLayoutParams(borderBottomLeftLayoutParams);
-        borderBottomRightLayoutParams.bottomMargin = screenHeightInPixels() - Math.round(height) - borderTopRightLayoutParams.topMargin;
-        borderBottomRight.setLayoutParams(borderBottomRightLayoutParams);
-    }
-
-    private int screenWidthInPixels() {
-        Point size = new Point();
-        getWindowManager().getDefaultDisplay().getSize(size);
-        return size.x;
-    }
-
-    private int screenHeightInPixels() {
-        Point size = new Point();
-        getWindowManager().getDefaultDisplay().getSize(size);
-        return size.y;
+        layout.addView(overlayImageView);
     }
 
     private void createCaptureButton() {
@@ -291,12 +207,17 @@ public class CustomCameraActivity extends Activity {
         @Override
         protected Void doInBackground(byte[]... jpegData) {
             try {
-                String filename = getIntent().getStringExtra(FILENAME);
+
+                String geartype = getIntent().getStringExtra(FILENAME) ;
+                String filename = String.format("%s_%s.%s",geartype, java.util.UUID.randomUUID(), "jpg");
                 int quality = getIntent().getIntExtra(QUALITY, 80);
                 File capturedImageFile = new File(getCacheDir(), filename);
                 Bitmap capturedImage = getScaledBitmap(jpegData[0]);
                 capturedImage = correctCaptureImageOrientation(capturedImage);
-                capturedImage.compress(CompressFormat.JPEG, quality, new FileOutputStream(capturedImageFile));
+                FileOutputStream fOut = new FileOutputStream(capturedImageFile);
+                capturedImage.compress(CompressFormat.JPEG, quality, fOut);
+                fOut.flush();
+                fOut.close();
                 Intent data = new Intent();
                 data.putExtra(IMAGE_URI, Uri.fromFile(capturedImageFile).toString());
                 setResult(RESULT_OK, data);
@@ -371,19 +292,9 @@ public class CustomCameraActivity extends Activity {
         return Math.round(dp * density);
     }
 
-    private boolean isXLargeScreen() {
-        int screenLayout = getResources().getConfiguration().screenLayout;
-        return (screenLayout & Configuration.SCREENLAYOUT_SIZE_MASK) == Configuration.SCREENLAYOUT_SIZE_XLARGE;
-    }
-
-    private boolean isLargeScreen() {
-        int screenLayout = getResources().getConfiguration().screenLayout;
-        return (screenLayout & Configuration.SCREENLAYOUT_SIZE_MASK) == Configuration.SCREENLAYOUT_SIZE_LARGE;
-    }
-
     private void setBitmap(ImageView imageView, String imageName) {
         try {
-            InputStream imageStream = getAssets().open("www/img/cameraoverlay/" + imageName);
+            InputStream imageStream = getAssets().open("www/resources/images/cameraoverlay/" + imageName);
             Bitmap bitmap = BitmapFactory.decodeStream(imageStream);
             imageView.setImageBitmap(bitmap);
             imageStream.close();
